@@ -1,0 +1,92 @@
+/* Simple +/-/* expression language; parser evaluates constant expressions on the fly*/
+import java_cup.runtime.*;
+
+parser code {:
+    // Connect this parser to a scanner!
+    Scanner s;
+    Parser(Scanner s){ this.s=s; }
+:}
+
+/* define how to connect to the scanner! */
+scan with {: return s.next_token(); :};
+
+/* Terminals (tokens returned by the scanner). */
+terminal           LPAR, RPAR, LBRACKET, RBRACKET, COMMA, SEMICOLON, PREFIX, SUFFIX, IF, ELSE, PLUS, MINUS, TIMES;
+terminal String    STRING_LITERAL, IDENTIFIER;        // our scanner provides numbers as integers
+
+/* Non terminals */
+non terminal            main;
+non terminal String    name, funCalls2, funDeclerations, funCalls, funDeclerations2, concat, arguments, callArguments, statements, ifStatement, callInStatement, callInStatement2, callArguments2, concat2;      // used to store evaluated subexpressions
+
+/* Precedences */
+precedence left IF;
+precedence left PLUS;
+
+/* The grammar rules */
+
+main 			::=	funDeclerations:f1 funCalls:f2				{: System.out.println("public class Main {\n\tpublic static void main(String[] args) {\n\t\t" + f2 + "\n\t}\n\n" + f1 + "\n}");:}
+				;
+			
+funDeclerations ::= funDeclerations:f1 funDeclerations2:f2			{: RESULT = f1 + "\n" + f2; :}
+				 |	funDeclerations2:f								{: RESULT = f; :}
+				 ;
+			
+funDeclerations2 ::= IDENTIFIER:i LPAR RPAR LBRACKET statements:s RBRACKET				{: RESULT = "\tpublic static String " + i + "() {\n\t\treturn " + s + ";\n\t}\n"; :}
+				  | IDENTIFIER:i LPAR arguments:a RPAR LBRACKET statements:s RBRACKET	{: RESULT = "\tpublic static String " + i + "(" + a + ") {\n\t\treturn " + s + ";\n\t}\n"; :}
+				  ;
+
+arguments 		::= IDENTIFIER:i										{: RESULT = "String " + i; :}
+				 |	IDENTIFIER:i COMMA arguments:a						{: RESULT = "String " + i + "," + a; :}
+				 ;
+						  			
+funCalls 		::= funCalls:f1 funCalls2:f2							{: RESULT = f1 + "\n" + "\t\tSystem.out.println(" + f2 + ");"; :}
+				|	funCalls2:f											{: RESULT = "System.out.println(" + f + ")" + ";"; :}
+				;
+		  
+funCalls2		::= IDENTIFIER:i LPAR RPAR								{: RESULT = i + "()" ; :}
+				 |  IDENTIFIER:i LPAR callArguments:a RPAR				{: RESULT = i + "(" + a + ")" ; :}
+				 ;
+				 
+callInStatement ::= callInStatement:s1 callInStatement2:s2					{: RESULT = s1 + "\n" +  s2 ; :}
+				|	callInStatement2:s										{: RESULT = s ; :}
+				;
+			
+callInStatement2 ::= IDENTIFIER:i LPAR RPAR								{: RESULT = i + "()" ; :}
+				 |  IDENTIFIER:i LPAR callArguments2:a RPAR				{: RESULT = i + "(" + a + ")" ; :}
+				 ;				 
+
+callArguments   ::= IDENTIFIER:i COMMA callArguments:a			{: RESULT = i + "," + a; :}
+				 | name:n COMMA callArguments:a					{: RESULT = n + "," + a; :}
+				 | funCalls2:f COMMA callArguments:a			{: RESULT = f + "," + a; :}
+				 | concat:c										{: RESULT = c; :}
+				 | funCalls2:f									{: RESULT = f; :}
+				 ;
+
+callArguments2   ::= IDENTIFIER:i COMMA callArguments:a				{: RESULT = i + "," + a; :}
+				 | name:n COMMA callArguments2:a					{: RESULT = n + "," + a; :}
+				 | funCalls2:f COMMA callArguments2:a				{: RESULT = f + "," + a; :}
+				 | concat2:c										{: RESULT = c; :}
+				 | funCalls2:f										{: RESULT = f; :}
+				 ;
+
+concat			::= concat:c PLUS name:n					{: RESULT = c + " + " + n ; :}
+				|	name:n									{: RESULT = n ; :}
+				;
+
+concat2			::= concat2:c PLUS IDENTIFIER:i				{: RESULT = c + " + " + i ; :}
+				|	IDENTIFIER:i								{: RESULT = i ; :}
+				;
+				
+statements		::= statements:s PLUS statements:f2				{: RESULT = s + " + " + f2 ; :}
+				| name:n											{: RESULT = n; :}
+				| IDENTIFIER:i										{: RESULT = i; :}
+				| ifStatement:s									{: RESULT = s; :}
+				| callInStatement:s								{: RESULT = s; :}
+				;
+				
+ifStatement		::= IF LPAR statements:s1 PREFIX statements:s2 RPAR statements:s3 ELSE statements:s4	{: RESULT = "((" + s2 + ")" + ".startsWith(" + s1 + ")? \n\t\t\t" + s3 + ": " + s4 + ")" ; :}
+				|	IF LPAR statements:s1 SUFFIX statements:s2 RPAR statements:s3 ELSE statements:s4	{: RESULT = "((" + s2 + ")" + ".endsWith(" + s1 + ")? \n\t\t\t" + s3 + ": " + s4 + ")" ; :}
+				;
+				
+name			::= STRING_LITERAL:s								{: RESULT = "\""+ s +"\"" ;:}
+				;
